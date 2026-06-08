@@ -338,32 +338,47 @@
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
 
-        // Inicializaciones de arranque
-        initMap();
-        actualizarDashboard();
+        // Inicializaciones estables una vez cargada la ventana por completo
+        window.addEventListener('load', () => {
+            initMap();
+            actualizarDashboard();
+        });
 
         function initMap() {
-            mapa = L.map('map', { zoomControl: false }).setView([13.5, -88.5], 14);
+            // Inicializar mapa apuntando por defecto a coordenadas de El Salvador
+            mapa = L.map('map', { zoomControl: false }).setView([13.68, -89.20], 12);
             
-            // Capa oscura premium
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '©OpenStreetMap'
+            // Proveedor estable de OpenStreetMap (Soporta HTTPS nativo para GitHub Pages)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
             }).addTo(mapa);
 
             polylineRuta = L.polyline([], { color: '#ff3344', weight: 5 }).addTo(mapa);
             
+            // Solución al bug del cuadro negro: recalcular el tamaño después de montar el componente
+            setTimeout(() => {
+                mapa.invalidateSize();
+            }, 400);
+
+            // Intentar geolocalizar la posición inicial del Corolla
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(position => {
                     const { latitude, longitude } = position.coords;
                     mapa.setView([latitude, longitude], 15);
-                    markerActual = L.circleMarker([latitude, longitude], { color: '#00ffcc', radius: 8 }).addTo(mapa);
-                });
+                    if (markerActual) {
+                        markerActual.setLatLng([latitude, longitude]);
+                    } else {
+                        markerActual = L.circleMarker([latitude, longitude], { color: '#00ffcc', radius: 8 }).addTo(mapa);
+                    }
+                    mapa.invalidateSize(); 
+                }, (err) => {
+                    console.warn("Ubicación inicial no disponible, esperando activación de viaje: ", err);
+                }, { enableHighAccuracy: true });
             }
         }
 
-        // ACCIÓN 1: ENCENDER EL CARRO E INICIAR VIAJE (ACTIVA MAPA Y TRAZADO)
+        // ACCIÓN 1: ENCENDER EL CARRO E INICIAR VIAJE (ACTIVA MAPA Y TRAZADO EN TIEMPO REAL)
         btnStart.addEventListener('click', () => {
-            // Limpiar estados anteriores en caliente
             rutaCoordenadas = [];
             distanciaViajeActual = 0;
             polylineRuta.setLatLngs([]);
@@ -375,7 +390,10 @@
                 statusDot.className = 'status-dot active';
                 statusText.innerText = 'En Ruta';
 
-                // Rastreo satelital en vivo
+                // Forzar corrección del lienzo del mapa antes de iniciar el trazado
+                mapa.invalidateSize();
+
+                // Encendido de rastreo continuo satelital
                 watchID = navigator.geolocation.watchPosition(
                     (position) => {
                         const { latitude, longitude } = position.coords;
@@ -383,7 +401,7 @@
 
                         if (rutaCoordenadas.length > 0) {
                             const ultimoPunto = rutaCoordenadas[rutaCoordenadas.length - 1];
-                            const distanciaTramo = ultimoPunto.distanceTo(nuevoPunto) / 1000; // Conversión a Kilómetros
+                            const distanciaTramo = ultimoPunto.distanceTo(nuevoPunto) / 1000; // Cálculo métrico a kilómetros
                             distanciaViajeActual += distanciaTramo;
                         }
 
@@ -401,14 +419,14 @@
                     { enableHighAccuracy: true, maximumAge: 0 }
                 );
             } else {
-                alert("Activa el GPS de tu celular para que la app pueda trazar la ruta.");
+                alert("Por favor, activa los permisos de ubicación GPS en tu navegador.");
             }
         });
 
-        // ACCIÓN 2: LLEGAR AL DESTINO Y TERMINAR VIAJE (DETIENEN EL GPS Y ABRE EL CAMPO DE TARIFA)
+        // ACCIÓN 2: LLEGAR AL DESTINO (DETIENE EL GPS E INVOCA EL FORMULARIO DE COBRO)
         btnStop.addEventListener('click', () => {
             if (watchID !== null) {
-                navigator.geolocation.clearWatch(watchID); // Apaga el rastreo activo inmediatamente
+                navigator.geolocation.clearWatch(watchID); // Apagado del hardware GPS
                 watchID = null;
             }
 
@@ -416,13 +434,13 @@
             statusDot.className = 'status-dot';
             statusText.innerText = 'Procesando';
 
-            // Mostrar el panel para colocar la tarifa cobrada
+            // Configurar datos medidos e inyectar al panel inferior
             kmViajeTxt.innerText = `Distancia total medida: ${distanciaViajeActual.toFixed(2)} km`;
             panelPostViaje.style.display = 'flex';
             document.getElementById('tarifa').focus();
         });
 
-        // ACCIÓN 3: GUARDAR EL REGISTRO CON LA TARIFA DICTADA
+        // ACCIÓN 3: GUARDAR EL REGISTRO CON LA TARIFA DICTADA POST-VIAJE
         btnGuardar.addEventListener('click', () => {
             const tarifaInput = document.getElementById('tarifa').value;
             
@@ -446,21 +464,20 @@
                 tipo
             };
 
-            // Insertar al inicio de la lista
             viajes.unshift(nuevoViaje);
             localStorage.setItem('rutaneta_viajes', JSON.stringify(viajes));
             
-            // Resetear la interfaz para el próximo viaje
+            // Limpieza del panel y vuelta al estado inicial
             document.getElementById('tarifa').value = '';
             panelPostViaje.style.display = 'none';
             btnStart.style.display = 'block';
             statusText.innerText = 'Libre';
 
             actualizarDashboard();
-            polylineRuta.setLatLngs([]); // Limpia la línea roja del mapa
+            polylineRuta.setLatLngs([]); 
+            mapa.invalidateSize(); // Asegurar consistencia visual del mapa para el próximo inicio
         });
 
-        // RE-RENDERIZADO DE NUMEROS Y TABLA
         function actualizarDashboard() {
             const listContainer = document.getElementById('viajes-list');
             listContainer.innerHTML = '';
@@ -495,13 +512,13 @@
             document.getElementById('total-neto').innerText = `$${neto.toFixed(2)}`;
         }
 
-        // LIMPIEZA DE BASE DE DATOS LOCAL
         document.getElementById('btn-limpiar').addEventListener('click', () => {
             if(confirm('¿Seguro que quieres borrar el registro de ganancias acumuladas de este día?')) {
                 viajes = [];
                 localStorage.setItem('rutaneta_viajes', JSON.stringify(viajes));
                 actualizarDashboard();
                 polylineRuta.setLatLngs([]);
+                mapa.invalidateSize();
             }
         });
     </script>
