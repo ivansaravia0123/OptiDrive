@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiDrive</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --bg-color: #0d0e12;
+            --card-bg: #161822;
+            --primary: #ff3344; 
+            --primary-glow: rgba(255, 51, 68, 0.2);
+            --text: #f1f3f9;
+            --text-secondary: #7e8494;
+            --success: #00ffcc;
+            --success-glow: rgba(0, 255, 204, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+        
+        header h1 span {
+            color: var(--primary);
+        }
+
+        .status-badge {
+            background: #1a1d29;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid #2d3142;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--text-secondary);
+            border-radius: 50%;
+        }
+
+        .status-dot.active {
+            background-color: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 1.5s infinite;
+        }
+
+        /* DASHBOARD METRICAS */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 16px;
+            border: 1px solid #232635;
+        }
+
+        .card h3 {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .card p {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .card.highlight p {
+            color: var(--success);
+        }
+
+        /* MAPA */
+        #map-container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid #232635;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 280px;
+            z-index: 1;
+        }
+
+        /* PANEL DE CONTROLES */
+        .controls {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #232635;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* FORMULARIO POST-VIAJE (OCULTO POR DEFECTO) */
+        .post-viaje-form {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            background: #1d2030;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #2d3142;
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        input, select {
+            background: #161822;
+            border: 1px solid #2d3142;
+            padding: 12px;
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        /* BOTONES */
+        .btn {
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .btn-start {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .btn-stop {
+            background: #ffcc00;
+            color: #0d0e12;
+            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.2);
+            display: none;
+        }
+
+        .btn-save {
+            background: var(--success);
+            color: #0d0e12;
+            box-shadow: 0 4px 15px var(--success-glow);
+        }
+
+        /* HISTORIAL */
+        .history {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #232635;
+        }
+
+        .history h2 {
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        .viaje-item {
+            background: #1d2030;
+            padding: 14px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #282b3d;
+        }
+
+        .viaje-monto {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .btn-clear {
+            background: transparent;
+            color: #ff4444;
+            font-size: 0.8rem;
+            border: 1px dashed #ff4444;
+            padding: 8px;
+            width: 100%;
+            margin-top: 10px;
+            border-radius: 8px;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Ruta<span>Neta</span></h1>
+        <div class="status-badge">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">Libre</span>
+        </div>
+    </header>
+
+    <div class="dashboard">
+        <div class="card highlight">
+            <h3>Ganancia Neta</h3>
+            <p id="total-neto">$0.00</p>
+        </div>
+        <div class="card">
+            <h3>Km Recorridos</h3>
+            <p id="total-km">0.00 km</p>
+        </div>
+        <div class="card">
+            <h3>Ingreso Bruto</h3>
+            <p id="total-bruto">$0.00</p>
+        </div>
+        <div class="card">
+            <h3>Costo Gasolina</h3>
+            <p id="total-gas" style="color: #ff3344;">$0.00</p>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <div class="controls">
+        
+        <button class="btn btn-start" id="btn-start">Iniciar Viaje</button>
+        <button class="btn btn-stop" id="btn-stop">Terminar Viaje</button>
+
+        <div class="post-viaje-form" id="post-viaje-panel">
+            <p style="font-weight: 700; font-size: 0.9rem; color: var(--success); text-align: center;" id="km-viaje-txt">
+                Distancia medida: 0.00 km
+            </p>
+            <div class="input-row">
+                <div class="form-group">
+                    <label>Tarifa Cobrada ($)</label>
+                    <input type="number" id="tarifa" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="form-group">
+                    <label>Modalidad</label>
+                    <select id="tipo">
+                        <option value="Especial">Especial</option>
+                        <option value="Colectivo">Colectivo</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-save" id="btn-guardar">Guardar Registro</button>
+        </div>
+
+    </div>
+
+    <div class="history">
+        <h2>Historial de Rutas</h2>
+        <div id="viajes-list"></div>
+        <button class="btn-clear" id="btn-limpiar">Borrar Datos de la Jornada</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // FACTOR COROLLA: ~$0.11 por kilómetro (Basado en $4.25 el galón)
+        const COSTO_GAS_POR_KM = 0.11;
+
+        let viajes = JSON.parse(localStorage.getItem('rutaneta_viajes')) || [];
+        let mapa, markerActual, polylineRuta;
+        let rutaCoordenadas = [];
+        let watchID = null;
+        let distanciaViajeActual = 0;
+
+        // Elementos del DOM
+        const btnStart = document.getElementById('btn-start');
+        const btnStop = document.getElementById('btn-stop');
+        const btnGuardar = document.getElementById('btn-guardar');
+        const panelPostViaje = document.getElementById('post-viaje-panel');
+        const kmViajeTxt = document.getElementById('km-viaje-txt');
+        
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        // Inicializaciones de arranque
+        initMap();
+        actualizarDashboard();
+
+        function initMap() {
+            mapa = L.map('map', { zoomControl: false }).setView([13.5, -88.5], 14);
+            
+            // Capa oscura premium
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '©OpenStreetMap'
+            }).addTo(mapa);
+
+            polylineRuta = L.polyline([], { color: '#ff3344', weight: 5 }).addTo(mapa);
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const { latitude, longitude } = position.coords;
+                    mapa.setView([latitude, longitude], 15);
+                    markerActual = L.circleMarker([latitude, longitude], { color: '#00ffcc', radius: 8 }).addTo(mapa);
+                });
+            }
+        }
+
+        // ACCIÓN 1: ENCENDER EL CARRO E INICIAR VIAJE (ACTIVA MAPA Y TRAZADO)
+        btnStart.addEventListener('click', () => {
+            // Limpiar estados anteriores en caliente
+            rutaCoordenadas = [];
+            distanciaViajeActual = 0;
+            polylineRuta.setLatLngs([]);
+            panelPostViaje.style.display = 'none';
+
+            if (navigator.geolocation) {
+                btnStart.style.display = 'none';
+                btnStop.style.display = 'block';
+                statusDot.className = 'status-dot active';
+                statusText.innerText = 'En Ruta';
+
+                // Rastreo satelital en vivo
+                watchID = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        const nuevoPunto = L.latLng(latitude, longitude);
+
+                        if (rutaCoordenadas.length > 0) {
+                            const ultimoPunto = rutaCoordenadas[rutaCoordenadas.length - 1];
+                            const distanciaTramo = ultimoPunto.distanceTo(nuevoPunto) / 1000; // Conversión a Kilómetros
+                            distanciaViajeActual += distanciaTramo;
+                        }
+
+                        rutaCoordenadas.push(nuevoPunto);
+                        polylineRuta.setLatLngs(rutaCoordenadas);
+                        mapa.setView(nuevoPunto, 16);
+
+                        if (markerActual) {
+                            markerActual.setLatLng(nuevoPunto);
+                        } else {
+                            markerActual = L.circleMarker(nuevoPunto, { color: '#00ffcc', radius: 8 }).addTo(mapa);
+                        }
+                    },
+                    (error) => console.error(error),
+                    { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            } else {
+                alert("Activa el GPS de tu celular para que la app pueda trazar la ruta.");
+            }
+        });
+
+        // ACCIÓN 2: LLEGAR AL DESTINO Y TERMINAR VIAJE (DETIENEN EL GPS Y ABRE EL CAMPO DE TARIFA)
+        btnStop.addEventListener('click', () => {
+            if (watchID !== null) {
+                navigator.geolocation.clearWatch(watchID); // Apaga el rastreo activo inmediatamente
+                watchID = null;
+            }
+
+            btnStop.style.display = 'none';
+            statusDot.className = 'status-dot';
+            statusText.innerText = 'Procesando';
+
+            // Mostrar el panel para colocar la tarifa cobrada
+            kmViajeTxt.innerText = `Distancia total medida: ${distanciaViajeActual.toFixed(2)} km`;
+            panelPostViaje.style.display = 'flex';
+            document.getElementById('tarifa').focus();
+        });
+
+        // ACCIÓN 3: GUARDAR EL REGISTRO CON LA TARIFA DICTADA
+        btnGuardar.addEventListener('click', () => {
+            const tarifaInput = document.getElementById('tarifa').value;
+            
+            if(!tarifaInput || parseFloat(tarifaInput) <= 0) {
+                alert("Por favor, ingresa la tarifa que le cobraste al cliente.");
+                return;
+            }
+
+            const tarifa = parseFloat(tarifaInput);
+            const tipo = document.getElementById('tipo').value;
+            const gastoGas = distanciaViajeActual * COSTO_GAS_POR_KM;
+            const gananciaNeta = tarifa - gastoGas;
+
+            const nuevoViaje = {
+                id: Date.now(),
+                fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                tarifa,
+                distancia: distanciaViajeActual,
+                gastoGas,
+                gananciaNeta,
+                tipo
+            };
+
+            // Insertar al inicio de la lista
+            viajes.unshift(nuevoViaje);
+            localStorage.setItem('rutaneta_viajes', JSON.stringify(viajes));
+            
+            // Resetear la interfaz para el próximo viaje
+            document.getElementById('tarifa').value = '';
+            panelPostViaje.style.display = 'none';
+            btnStart.style.display = 'block';
+            statusText.innerText = 'Libre';
+
+            actualizarDashboard();
+            polylineRuta.setLatLngs([]); // Limpia la línea roja del mapa
+        });
+
+        // RE-RENDERIZADO DE NUMEROS Y TABLA
+        function actualizarDashboard() {
+            const listContainer = document.getElementById('viajes-list');
+            listContainer.innerHTML = '';
+
+            let bruto = 0, km = 0, gas = 0, neto = 0;
+
+            if (viajes.length === 0) {
+                listContainer.innerHTML = '<p style="color:var(--text-secondary); text-align:center; font-size:0.9rem;">Esperando rutas de hoy...</p>';
+            }
+
+            viajes.forEach(v => {
+                bruto += v.tarifa;
+                km += v.distancia;
+                gas += v.gastoGas;
+                neto += v.gananciaNeta;
+
+                const item = document.createElement('div');
+                item.className = 'viaje-item';
+                item.innerHTML = `
+                    <div class="viaje-info">
+                        <strong>${v.tipo} (${v.distancia.toFixed(2)} km)</strong><br>
+                        <span>Hora: ${v.fecha}</span>
+                    </div>
+                    <div class="viaje-monto">$${v.tarifa.toFixed(2)}</div>
+                `;
+                listContainer.appendChild(item);
+            });
+
+            document.getElementById('total-bruto').innerText = `$${bruto.toFixed(2)}`;
+            document.getElementById('total-km').innerText = `${km.toFixed(2)} km`;
+            document.getElementById('total-gas').innerText = `$${gas.toFixed(2)}`;
+            document.getElementById('total-neto').innerText = `$${neto.toFixed(2)}`;
+        }
+
+        // LIMPIEZA DE BASE DE DATOS LOCAL
+        document.getElementById('btn-limpiar').addEventListener('click', () => {
+            if(confirm('¿Seguro que quieres borrar el registro de ganancias acumuladas de este día?')) {
+                viajes = [];
+                localStorage.setItem('rutaneta_viajes', JSON.stringify(viajes));
+                actualizarDashboard();
+                polylineRuta.setLatLngs([]);
+            }
+        });
+    </script>
+</body>
+</html>
